@@ -2,8 +2,14 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Flappy Ma W — carte exacte</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>Flappy Ma W</title>
+  <meta name="theme-color" content="#1d254b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Flappy Ma W">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="imgcarte.png">
   <style>
     html, body {
       margin: 0;
@@ -13,21 +19,130 @@
       display: grid;
       place-items: center;
     }
-    canvas {
+    .app {
+      position: relative;
       width: min(100vw, 520px);
-      height: auto;
+      height: min(calc(100vw * 1.3846), 720px);
+      max-height: 100vh;
+    }
+    canvas {
+      width: 100%;
+      height: 100%;
       border-radius: 18px;
       box-shadow: 0 16px 40px rgba(0,0,0,.45);
       touch-action: manipulation;
       background: linear-gradient(#48588d, #1f264d);
+      display: block;
+    }
+    .overlay {
+      position: absolute;
+      inset: 0;
+      border-radius: 18px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 5;
+      padding: 24px;
+      background: linear-gradient(rgba(19,25,52,.50), rgba(19,25,52,.82));
+      backdrop-filter: blur(2px);
+    }
+    .overlay.hidden { display: none; }
+    .menu-card {
+      width: 100%;
+      max-width: 380px;
+      background: rgba(14, 20, 44, 0.62);
+      border: 1px solid rgba(255,255,255,.08);
+      box-shadow: 0 18px 40px rgba(0,0,0,.35);
+      border-radius: 24px;
+      padding: 22px 22px 18px;
+      color: white;
+      text-align: center;
+    }
+    .menu-image {
+      width: 100%;
+      border-radius: 20px;
+      display: block;
+      box-shadow: 0 14px 28px rgba(0,0,0,.35);
+      margin-bottom: 18px;
+    }
+    .menu-title {
+      font-size: 30px;
+      font-weight: 700;
+      margin: 0 0 6px;
+    }
+    .menu-subtitle {
+      margin: 0 0 18px;
+      color: rgba(255,255,255,.82);
+      line-height: 1.4;
+      font-size: 15px;
+    }
+    .menu-actions {
+      display: grid;
+      gap: 12px;
+    }
+    .btn {
+      border: 0;
+      border-radius: 14px;
+      height: 48px;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .btn-play {
+      background: #d7e41f;
+      color: #24305a;
+    }
+    .btn-secondary {
+      background: rgba(255,255,255,.10);
+      color: white;
+    }
+    .score-box {
+      margin-top: 16px;
+      padding: 14px;
+      border-radius: 16px;
+      background: rgba(255,255,255,.07);
+      display: none;
+    }
+    .score-box.visible { display: block; }
+    .score-line {
+      display: flex;
+      justify-content: space-between;
+      padding: 6px 0;
+      font-size: 17px;
     }
   </style>
 </head>
 <body>
-  <canvas id="game" width="520" height="720"></canvas>
+  <div class="app">
+    <canvas id="game" width="520" height="720"></canvas>
+
+    <div class="overlay" id="menuOverlay">
+      <div class="menu-card">
+        <img class="menu-image" src="imgcarte.png" alt="Carte Ma W">
+        <h1 class="menu-title">Flappy Ma W</h1>
+        <p class="menu-subtitle">Évite les obstacles et fais le meilleur score possible avec ta carte MA W.</p>
+        <div class="menu-actions">
+          <button class="btn btn-play" id="playBtn">Jouer</button>
+          <button class="btn btn-secondary" id="scoresBtn">Mes scores</button>
+        </div>
+        <div class="score-box" id="scoreBox">
+          <div class="score-line"><span>Dernier score</span><strong id="lastScoreValue">0</strong></div>
+          <div class="score-line"><span>Meilleur score</span><strong id="bestScoreValue">0</strong></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <script>
     const canvas = document.getElementById("game");
     const ctx = canvas.getContext("2d");
+
+    const menuOverlay = document.getElementById("menuOverlay");
+    const playBtn = document.getElementById("playBtn");
+    const scoresBtn = document.getElementById("scoresBtn");
+    const scoreBox = document.getElementById("scoreBox");
+    const lastScoreValue = document.getElementById("lastScoreValue");
+    const bestScoreValue = document.getElementById("bestScoreValue");
 
     const W = canvas.width;
     const H = canvas.height;
@@ -40,13 +155,13 @@
     const GRAVITY = 0.42;
     const FLAP = -7.0;
 
-    let state = "start";
+    let state = "menu";
     let score = 0;
     let best = Number(localStorage.getItem("maw_best_realcard") || 0);
-    let frame = 0;
+    let lastScore = Number(localStorage.getItem("maw_last_realcard") || 0);
 
     const card = new Image();
-    card.src = "crte.png"; // exact uploaded card image
+    card.src = "crte.png";
 
     const player = {
       x: 120,
@@ -67,7 +182,6 @@
     const pipes = [];
 
     function resetGame() {
-      state = "start";
       score = 0;
       player.y = 330;
       player.vy = 0;
@@ -77,6 +191,23 @@
       pipes[0].x = 375;
       pipes[0].top = 240;
       pipes[0].label = "LOISIRS";
+    }
+
+    function showMenu() {
+      best = Number(localStorage.getItem("maw_best_realcard") || 0);
+      lastScore = Number(localStorage.getItem("maw_last_realcard") || 0);
+      lastScoreValue.textContent = String(lastScore);
+      bestScoreValue.textContent = String(best);
+      menuOverlay.classList.remove("hidden");
+      scoreBox.classList.remove("visible");
+      state = "menu";
+    }
+
+    function startGame() {
+      resetGame();
+      state = "playing";
+      menuOverlay.classList.add("hidden");
+      flapNow();
     }
 
     function addPipe(x) {
@@ -93,12 +224,7 @@
     }
 
     function flapNow() {
-      if (state === "gameover") {
-        resetGame();
-        state = "playing";
-      } else if (state === "start") {
-        state = "playing";
-      }
+      if (state !== "playing") return;
       player.vy = FLAP;
     }
 
@@ -165,7 +291,9 @@
         [2,44,26],[36,60,70],[140,72,68],[243,44,68],[350,52,38],[392,80,82],[486,44,32]
       ];
       for (let i = 0; i < buildings.length; i++) {
-        const [x,h,w] = buildings[i];
+        const x = buildings[i][0];
+        const h = buildings[i][1];
+        const w = buildings[i][2];
         ctx.fillStyle = i % 2 ? "rgba(195,205,245,0.10)" : "rgba(195,205,245,0.07)";
         ctx.fillRect(x, FLOOR_Y - h, w, h);
         ctx.fillStyle = "rgba(216,227,28,0.32)";
@@ -198,24 +326,20 @@
       const labelX = x + (PIPE_W - labelW) / 2;
       const lime = "#d7e41f";
 
-      // top
       ctx.fillStyle = lime;
       ctx.fillRect(innerX, 8, 6, pipe.top);
       ctx.fillRect(innerX + innerW - 6, 8, 6, pipe.top);
       ctx.fillRect(innerX - 10, 0, innerW + 20, 10);
       ctx.fillRect(innerX - 10, pipe.top, innerW + 20, 10);
-
       roundRect(labelX, pipe.top - 38, labelW, labelH, 10);
       ctx.fill();
 
-      // bottom
       const bottomY = pipe.top + GAP_H;
       const bottomH = FLOOR_Y - 10 - bottomY;
       ctx.fillRect(innerX, bottomY, 6, bottomH);
       ctx.fillRect(innerX + innerW - 6, bottomY, 6, bottomH);
       ctx.fillRect(innerX - 10, bottomY - 10, innerW + 20, 10);
       ctx.fillRect(innerX - 10, FLOOR_Y - 10, innerW + 20, 10);
-
       roundRect(labelX, bottomY + 10, labelW, labelH, 10);
       ctx.fill();
 
@@ -263,34 +387,26 @@
       ctx.fillText(String(best), W - 146, 45);
     }
 
-    function drawOverlay() {
-      if (state === "playing") return;
+    function drawGameOver() {
+      if (state !== "gameover") return;
+      ctx.fillStyle = "rgba(15,18,36,.65)";
+      roundRect(100, 250, 320, 156, 20);
+      ctx.fill();
+
+      ctx.fillStyle = "#fff";
       ctx.textAlign = "center";
-      if (state === "start") {
-        ctx.fillStyle = "rgba(15,18,36,.22)";
-        roundRect(110, 290, 300, 86, 18);
-        ctx.fill();
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 25px Arial";
-        ctx.fillText("Touchez pour jouer", W / 2, 323);
-        ctx.font = "16px Arial";
-        ctx.fillText("Le personnage est exactement votre carte jointe.", W / 2, 352);
-      } else {
-        ctx.fillStyle = "rgba(15,18,36,.65)";
-        roundRect(102, 248, 316, 152, 20);
-        ctx.fill();
-        ctx.fillStyle = "#fff";
-        ctx.font = "bold 30px Arial";
-        ctx.fillText("Perdu", W / 2, 282);
-        ctx.font = "18px Arial";
-        ctx.fillText("Score : " + score + "  •  Meilleur : " + best, W / 2, 326);
-        ctx.fillStyle = "#d7e41f";
-        roundRect(162, 350, 196, 40, 12);
-        ctx.fill();
-        ctx.fillStyle = "#263154";
-        ctx.font = "bold 18px Arial";
-        ctx.fillText("Rejouer", W / 2, 375);
-      }
+      ctx.font = "bold 30px Arial";
+      ctx.fillText("Perdu", W / 2, 286);
+      ctx.font = "18px Arial";
+      ctx.fillText("Score : " + score + "  •  Meilleur : " + best, W / 2, 328);
+
+      ctx.fillStyle = "#d7e41f";
+      roundRect(162, 350, 196, 42, 12);
+      ctx.fill();
+
+      ctx.fillStyle = "#263154";
+      ctx.font = "bold 18px Arial";
+      ctx.fillText("Retour menu...", W / 2, 377);
     }
 
     function hitPipe(pipe) {
@@ -308,8 +424,19 @@
       return overlapX && outsideGap;
     }
 
+    function gameOver() {
+      if (state !== "playing") return;
+      state = "gameover";
+      lastScore = score;
+      localStorage.setItem("maw_last_realcard", String(lastScore));
+      if (score > best) {
+        best = score;
+        localStorage.setItem("maw_best_realcard", String(best));
+      }
+      setTimeout(showMenu, 1300);
+    }
+
     function update() {
-      frame++;
       for (const c of clouds) {
         c.x -= 0.12 * c.s;
         if (c.x < -120) c.x = W + 20;
@@ -333,7 +460,7 @@
           }
         }
 
-        if (hitPipe(pipe)) state = "gameover";
+        if (hitPipe(pipe)) gameOver();
       }
 
       if (pipes.length && pipes[0].x + PIPE_W < -10) {
@@ -342,7 +469,7 @@
       }
 
       if (player.y - player.h / 2 < -30 || player.y + player.h / 2 > FLOOR_Y) {
-        state = "gameover";
+        gameOver();
       }
     }
 
@@ -351,7 +478,7 @@
       pipes.forEach(drawPipe);
       drawPlayer();
       drawHUD();
-      drawOverlay();
+      drawGameOver();
     }
 
     function loop() {
@@ -363,12 +490,30 @@
     window.addEventListener("keydown", (e) => {
       if (e.code === "Space") {
         e.preventDefault();
-        flapNow();
+        if (state === "playing") flapNow();
       }
     });
-    canvas.addEventListener("pointerdown", flapNow);
+
+    canvas.addEventListener("pointerdown", () => {
+      if (state === "playing") flapNow();
+      else if (state === "gameover") showMenu();
+    });
+
+    playBtn.addEventListener("click", startGame);
+    scoresBtn.addEventListener("click", () => {
+      best = Number(localStorage.getItem("maw_best_realcard") || 0);
+      lastScore = Number(localStorage.getItem("maw_last_realcard") || 0);
+      lastScoreValue.textContent = String(lastScore);
+      bestScoreValue.textContent = String(best);
+      scoreBox.classList.toggle("visible");
+    });
+
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("service-worker.js").catch(() => {});
+    }
 
     resetGame();
+    showMenu();
     loop();
   </script>
 </body>
