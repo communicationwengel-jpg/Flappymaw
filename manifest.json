@@ -1,0 +1,15 @@
+{
+  "name": "Flappy Ma W",
+  "short_name": "MA W",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#1d254b",
+  "theme_color": "#d7e41f",
+  "icons": [
+    {
+      "src": "imgcarte.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
